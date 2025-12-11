@@ -175,7 +175,7 @@ LASER is designed to be modular and flexible to accommodate a variety of modelin
 
 ### Using AI
 
-For internal IDM users, you can use a pre-built AI interface, [JENNER-GPT](https://chatgpt.com/g/g-67e6b80cd3e88191ae01e058f9df665e-jenner-ic) to create your simulations.
+For internal IDM users, you can use a pre-built AI interface, [JENNER-GPT](https://chatgpt.com/g/g-67e6b80cd3e88191ae01e058f9df665e-jenner-ic), to create your simulations or ask questions about LASER.
 
 <!-- should add some example prompts -->
 

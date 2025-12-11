@@ -32,9 +32,9 @@ theme:
 
 nav: # Navigation structure for the documentation
   - Home: index.md
-  - What's new: whatsnew.md
   - Software overview:
     - software-overview/index.md
+    - software-overview/scenario.md
     - Demographics:
       - software-overview/demographics/index.md
       - software-overview/demographics/age_pyramid.ipynb
@@ -44,7 +44,6 @@ nav: # Navigation structure for the documentation
     - software-overview/transmission.md
   - Get started:
     - get-started/index.md
-    - get-started/initialization.md
     - get-started/calibration.md
     - get-started/optimization.md
   - Tutorials:
@@ -62,7 +61,7 @@ nav: # Navigation structure for the documentation
       - Modeling the spread of rabies in one dimension: tutorials/notebooks/09_rabies_diffusion_1D.ipynb
       - Periodicity of measles in England and Wales: tutorials/notebooks/10_EW_periodicity.ipynb
       - England and Wales measles analysis: tutorials/notebooks/EW_analysis.ipynb
-      - SEI and SEIS model implementations: tutorials/notebooks/SEI_and_SEIS_implementation.ipynb
+      - SEI and SEIS model implementations: tutorials/notebooks/SEI_and_SEIS_implementations.ipynb
       - Explore the vital dynamics births components: tutorials/notebooks/births.ipynb
       - Test constant population components: tutorials/notebooks/constant_pop.ipynb
       - Numba compatible distributions: tutorials/notebooks/distributions.ipynb
@@ -72,6 +71,8 @@ nav: # Navigation structure for the documentation
       - Seasonality in transmission: tutorials/notebooks/seasonality.ipynb
   - API reference: reference/
   - Contribution guide: contribute.md
+  - What's new: whatsnew.md
+
 
 # icons, semantic markup, emojis
 markdown_extensions:

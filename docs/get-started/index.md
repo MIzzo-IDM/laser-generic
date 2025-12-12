@@ -270,7 +270,8 @@ plt.show()
 
 ## Using AI
 
-For internal IDM users, you can use a pre-built AI interface, [JENNER-GPT](https://chatgpt.com/g/g-67e6b80cd3e88191ae01e058f9df665e-jenner-ic), to create your simulations or ask questions about LASER.
+For internal IDM users, you can use a pre-built AI interface, nicknamed [JENNER-GPT](https://chatgpt.com/g/g-67e6b80cd3e88191ae01e058f9df665e-jenner-ic), to create your simulations or ask questions about LASER. It is designed to know everything about LASER and can not only answer your general questions about the system, but also provide working code for components or for entire runnable scripts.
+
 
 <!-- should add some example prompts -->
 

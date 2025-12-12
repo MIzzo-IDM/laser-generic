@@ -1,4 +1,4 @@
-from laser.generic.newutils import TimingStats as ts  # noqa: I001
+from laser.generic.utils import TimingStats as ts  # noqa: I001
 
 import json
 import unittest
@@ -11,7 +11,7 @@ from laser.core import PropertySet
 
 from laser.generic import SI
 from laser.generic import Model
-from laser.generic.newutils import ValuesMap
+from laser.generic.utils import ValuesMap
 from laser.core.utils import grid
 from laser.generic.vitaldynamics import ConstantPopVitalDynamics
 from tests.utils import base_maps
@@ -66,7 +66,7 @@ class Default(unittest.TestCase):
             scenario["I"] = 10
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
-            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nticks=NTICKS)
 
             params = PropertySet({"nticks": NTICKS, "beta": 1.0 / 32})
 
@@ -158,7 +158,7 @@ class Default(unittest.TestCase):
             scenario["I"] = 10
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
-            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nticks=NTICKS)
 
             params = PropertySet({"nticks": NTICKS, "beta": 1.0 / 32})
 
@@ -246,7 +246,7 @@ class Default(unittest.TestCase):
             scenario["I"] = init_inf
             parameters = PropertySet({"prng_seed": 2, "nticks": NTICKS, "verbose": True, "beta": 0.04, "cbr": 400})
 
-            birthrate_map = ValuesMap.from_scalar(parameters.cbr, nsteps=parameters.nticks, nnodes=1)
+            birthrate_map = ValuesMap.from_scalar(parameters.cbr, nticks=parameters.nticks, nnodes=1)
 
             with ts.start("Model Initialization"):
                 model = Model(scenario, parameters, birthrate_map, skip_capacity=True)

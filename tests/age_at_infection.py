@@ -30,11 +30,11 @@ from laser.core.demographics import KaplanMeierEstimator
 
 from laser.generic import SEIR
 from laser.generic import Model
-from laser.generic.newutils import ValuesMap
-from laser.generic.newutils import validate
+from laser.generic.utils import ValuesMap
+from laser.generic.utils import validate
 from laser.generic.vitaldynamics import BirthsByCBR
 from laser.generic.vitaldynamics import MortalityByEstimator
-from tests.utils import stdgrid
+from utils import stdgrid
 
 State = SEIR.State
 
@@ -248,7 +248,7 @@ if __name__ == "__main__":
     scenario["R"] = scenario.population - init_susceptible - init_infected
 
     params = PropertySet({"nticks": NTICKS, "beta": R0 / INFECTIOUS_DURATION_MEAN})
-    birthrates_map = ValuesMap.from_scalar(35, nsteps=NTICKS, nnodes=len(scenario))
+    birthrates_map = ValuesMap.from_scalar(35, nticks=NTICKS, nnodes=len(scenario))
 
     model = Model(scenario, params, birthrates=birthrates_map)
     # model.validating = True

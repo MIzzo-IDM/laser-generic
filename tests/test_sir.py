@@ -1,4 +1,4 @@
-from laser.generic.newutils import TimingStats as ts  # noqa: I001
+from laser.generic.utils import TimingStats as ts  # noqa: I001
 
 import json
 import unittest
@@ -14,7 +14,7 @@ from scipy.special import lambertw
 
 from laser.generic import SIR
 from laser.generic import Model
-from laser.generic.newutils import ValuesMap
+from laser.generic.utils import ValuesMap
 from laser.generic.vitaldynamics import BirthsByCBR, MortalityByEstimator
 from tests.utils import stdgrid
 
@@ -128,7 +128,7 @@ class Default(unittest.TestCase):
             scenario["R"] = 0
 
             cbr = np.random.uniform(5, 35, len(scenario))
-            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nticks=NTICKS)
             infectious_duration_mean = 7.0
             beta = R0 / infectious_duration_mean
             params = PropertySet({"nticks": NTICKS, "beta": beta})
@@ -308,7 +308,7 @@ class Default(unittest.TestCase):
             # --- Vital Dynamics ---
             # Birthrate moderately large; mortality via Kaplan–Meier curve.
             cbr = np.random.uniform(5, 35, len(scenario))  # births per 1000 per year
-            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nticks=NTICKS)
 
             pyramid = AliasedDistribution(np.full(89, 1_000))
             survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())

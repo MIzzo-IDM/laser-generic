@@ -1,4 +1,4 @@
-from laser.generic.newutils import TimingStats as ts  # noqa: I001
+from laser.generic.utils import TimingStats as ts  # noqa: I001
 
 import json
 import unittest
@@ -15,7 +15,7 @@ from laser.core.demographics import KaplanMeierEstimator
 
 from laser.generic import SEIR
 from laser.generic import Model
-from laser.generic.newutils import ValuesMap
+from laser.generic.utils import ValuesMap
 from laser.generic.vitaldynamics import BirthsByCBR, MortalityByEstimator
 from tests.utils import stdgrid
 
@@ -155,7 +155,7 @@ class Default(unittest.TestCase):
         """
         with ts.start("test_grid"):
             cbr = np.random.uniform(5, 35, EM * EN)
-            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nticks=NTICKS)
             pyramid = AliasedDistribution(np.full(89, 1_000))
             survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
@@ -336,7 +336,7 @@ class Default(unittest.TestCase):
         with ts.start("test_seir_linear_with_demography"):
             # Let's run for 2 years to let things smooth out with these settings
             cbr = np.random.uniform(5, 35, PEE)
-            birthrates = ValuesMap.from_nodes(cbr, nsteps=NTICKS * 1)
+            birthrates = ValuesMap.from_nodes(cbr, nticks=NTICKS * 1)
             pyramid = AliasedDistribution(np.full(89, 1_000))
             survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 

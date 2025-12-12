@@ -3,44 +3,355 @@ This module provides utility functions for the laser-measles project.
 
 """
 
+import time
 from math import ceil
 from typing import Any
+from typing import ClassVar
 
+import geopandas as gpd
 import numpy as np
+
 from laser.core import PropertySet
+from laser.generic.shared import State
+from pyproj import Transformer
+from shapely.geometry import Point
+
+__all__ = ["TimingStats", "ValuesMap", "get_centroids"]
+
+
+class ValuesMap:
+    """
+    A class to efficiently represent values mapped over nodes and time steps.
+
+    Arguments:
+        nnodes (int): Number of nodes.
+        nticks (int): Number of time steps.
+
+    Methods to create ValuesMap from different data sources:
+        - from_scalar(scalar: float, nnodes: int, nticks: int)
+        - from_timeseries(data: np.ndarray, nnodes: int)
+        - from_nodes(data: np.ndarray, nticks: int)
+        - from_array(data: np.ndarray, writeable: bool = False)
+    """
+
+    def __init__(self, nnodes: int, nticks: int):
+        self._nnodes = nnodes
+        self._nticks = nticks
+
+        return
+
+    @staticmethod
+    def from_scalar(scalar: float, nnodes: int, nticks: int) -> "ValuesMap":
+        """
+        Create a ValuesMap with the same scalar value for all nodes and time steps.
+
+        Args:
+            scalar (float): The scalar value to fill the map.
+            nnodes (int): Number of nodes.
+            nticks (int): Number of time steps.
+
+        Returns:
+            ValuesMap: The created ValuesMap instance.
+        """
+        assert scalar >= 0.0, "scalar must be non-negative"
+        assert nnodes > 0, "nnodes must be greater than 0"
+        assert nticks > 0, "nticks must be greater than 0"
+        instance = ValuesMap(nnodes=nnodes, nticks=nticks)
+        tmp = np.array([[scalar]], dtype=np.float32)
+        instance._data = np.broadcast_to(tmp, (nticks, nnodes))
+
+        return instance
+
+    @staticmethod
+    def from_timeseries(data: np.ndarray, nnodes: int, nticks: int = None) -> "ValuesMap":
+        """
+        Create a ValuesMap from a time series array for all nodes.
+
+        All nodes have the same time series data.
+
+        nticks is inferred from the length of data if not explicitly provided.
+
+        Args:
+            data (np.ndarray): 1D array of time series data.
+            nnodes (int): Number of nodes.
+            nticks (int, optional): Number of ticks. Defaults to None.
+
+        Returns:
+            ValuesMap: The created ValuesMap instance.
+        """
+        assert np.all(data >= 0.0), "data must be non-negative"
+        assert len(data.shape) == 1, "data must be a 1D array"
+        assert data.shape[0] > 0, "data must have at least one element"
+        assert nnodes > 0, "nnodes must be greater than 0"
+        nticks = data.shape[0] if nticks is None else nticks
+        assert nticks > 0, "nticks must be greater than 0"
+        instance = ValuesMap(nnodes=nnodes, nticks=nticks)
+        if data.shape[0] == nticks:
+            row = data
+        else:
+            row = data[np.arange(nticks) % data.shape[0]]
+        instance._data = np.broadcast_to(row[:, None], (nticks, nnodes))
+
+        return instance
+
+    @staticmethod
+    def from_nodes(data: np.ndarray, nticks: int) -> "ValuesMap":
+        """
+        Create a ValuesMap from a nodes array for all time steps.
+
+        All time steps have the same node data.
+
+        nnodes is inferred from the length of data.
+
+        Args:
+            data (np.ndarray): 1D array of node data.
+            nticks (int): Number of time steps.
+
+        Returns:
+            ValuesMap: The created ValuesMap instance.
+        """
+        assert np.all(data >= 0.0), "data must be non-negative"
+        assert len(data.shape) == 1, "data must be a 1D array"
+        assert data.shape[0] > 0, "data must have at least one element"
+        assert nticks > 0, "nticks must be greater than 0"
+        nnodes = data.shape[0]
+        instance = ValuesMap(nnodes=nnodes, nticks=nticks)
+        instance._data = np.broadcast_to(data[None, :], (nticks, nnodes))
+
+        return instance
+
+    @staticmethod
+    def from_array(data: np.ndarray, writeable: bool = False) -> "ValuesMap":
+        """
+        Create a ValuesMap from a 2D array of data.
+
+        Args:
+            data (np.ndarray): 2D array of shape (nticks, nnodes).
+            writeable (bool): If True, the underlying data array is writeable and can be modified during simulation. Default is False.
+
+        Returns:
+            ValuesMap: The created ValuesMap instance.
+        """
+        assert np.all(data >= 0.0), "data must be non-negative"
+        assert len(data.shape) == 2, "data must be a 2D array"
+        assert data.shape[0] > 0, "data must have at least one row"
+        assert data.shape[1] > 0, "data must have at least one column"
+        nticks, nnodes = data.shape
+        instance = ValuesMap(nnodes=nnodes, nticks=nticks)
+        instance._data = data.astype(np.float32)
+        instance._data.flags.writeable = writeable
+
+        return instance
+
+    @property
+    def nnodes(self):
+        """Number of nodes."""
+        return self._nnodes
+
+    @property
+    def nticks(self):
+        """Number of time steps."""
+        return self._nticks
+
+    @property
+    def shape(self):
+        """Shape of the underlying data array (nticks, nnodes)."""
+        return self._data.shape
+
+    @property
+    def values(self):
+        """Underlying data array of shape (nticks, nnodes)."""
+        return self._data
+
+    def __getitem__(self, access):
+        return self._data[access]
+
+
+class TimingContext:
+    """Internal class for timing context management."""
+
+    def __init__(self, label: str, stats: "TimingStats", parent: dict) -> None:  # type: ignore
+        self.label = label
+        self.stats = stats
+        self.parent = parent
+        self.children = {}
+        self.ncalls = 0
+        self.elapsed = 0
+        self.start = 0
+        self.end = 0
+
+        return
+
+    def __enter__(self):
+        self.ncalls += 1
+        self.stats._enter(self)
+        self.start = time.perf_counter_ns()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.end = time.perf_counter_ns()
+        self.elapsed += self.end - self.start
+        self.stats._exit(self)
+
+        return
+
+    @property
+    def inclusive(self) -> int:
+        return self.elapsed
+
+    @property
+    def exclusive(self) -> int:
+        excl = self.elapsed
+        for child in self.children.values():
+            excl -= child.elapsed
+
+        return excl
+
+
+class _TimingStats:
+    """
+    Internal class for managing timing statistics.
+    """
+
+    def __init__(self) -> None:
+        self.frozen = False
+        self.context = {}
+        self.root = self.start("root")
+        self.root.__enter__()
+
+        return
+
+    def start(self, label: str) -> TimingContext:
+        """Create a timing context with the given label."""
+        assert self.frozen is False
+
+        if label not in self.context:
+            self.context[label] = TimingContext(label, self, self.context)
+
+        return self.context[label]
+
+    def _enter(self, context: TimingContext) -> None:
+        self.context = context.children
+        return
+
+    def _exit(self, context: TimingContext) -> None:
+        assert self.context is context.children
+        self.context = context.parent
+        return
+
+    def freeze(self) -> None:
+        """Freeze the timing statistics."""
+        assert self.frozen is False
+        self.root.__exit__(None, None, None)
+        self.frozen = True
+
+        return
+
+    _scale_factors: ClassVar[dict[str, float]] = {
+        "ns": 1,
+        "nanoseconds": 1,
+        "us": 1e3,
+        "µs": 1e3,
+        "microseconds": 1e3,
+        "ms": 1e6,
+        "milliseconds": 1e6,
+        "s": 1e9,
+        "sec": 1e9,
+        "seconds": 1e9,
+    }
+
+    def to_string(self, scale: str = "ms") -> str:
+        assert self.frozen is True
+
+        assert scale in self._scale_factors
+        factor = self._scale_factors[scale]
+
+        lines = []
+
+        def _recurse(node: TimingContext, depth: int) -> None:
+            indent = "    " * depth
+            tot_time = node.elapsed / factor
+            avg_time = node.elapsed / node.ncalls / factor if node.ncalls > 0 else 0
+            exc_time = node.exclusive / factor
+            lines.append(
+                f"{indent}{node.label}: {node.ncalls} calls, total {tot_time:.3f} {scale}, avg {avg_time:.3f} {scale}, excl {exc_time:.3f} {scale}"
+            )
+            for child in node.children.values():
+                _recurse(child, depth + 1)
+
+            return
+
+        _recurse(self.root, 0)
+        return "\n".join(lines)
+
+    def to_dict(self, scale: str = "ms") -> dict:
+        assert self.frozen is True
+
+        assert scale in self._scale_factors
+        factor = self._scale_factors[scale]
+
+        def _recurse(node: TimingContext) -> dict:
+            result = {
+                "label": node.label,
+                "ncalls": node.ncalls,
+                "inclusive_ns": node.inclusive / factor,
+                # "exclusive_ns": node.exclusive / factor,
+                "children": [],
+            }
+            for child in node.children.values():
+                result["children"].append(_recurse(child))
+
+            return result
+
+        return _recurse(self.root)
+
+
+TimingStats = _TimingStats()
+
+
+def validate(pre, post):
+    """
+    Decorator to add pre- and post-validation to a method.
+
+    Calls the given pre- and post-validation methods if the model or component is in validating mode.
+    """
+
+    def decorator(func):
+        def wrapper(self, tick: int, *args, **kwargs):
+            if pre and (getattr(self.model, "validating", False) or getattr(self, "validating", False)):
+                with TimingStats.start(pre.__name__):
+                    getattr(self, pre.__name__)(tick)
+            result = func(self, tick, *args, **kwargs)
+            if post and (getattr(self.model, "validating", False) or getattr(self, "validating", False)):
+                with TimingStats.start(post.__name__):
+                    getattr(self, post.__name__)(tick)
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def get_centroids(gdf: gpd.GeoDataFrame) -> np.ndarray:
+    """Get centroids of geometries in gdf in degrees (EPSG:4326)."""
+
+    gdf_3857 = gdf.to_crs(epsg=3857)
+    centroids_3857 = gdf_3857.geometry.centroid
+
+    # centroids_3857.to_crs(epsg=4326) emits a Warning is there is only one point (one node)
+    if len(centroids_3857) > 1:
+        centroids_deg = centroids_3857.to_crs(epsg=4326)
+    else:
+        # Explicitly transform the single centroid
+        transformer = Transformer.from_crs(3857, 4326, always_xy=True)
+        x, y = centroids_3857.x.values[0], centroids_3857.y.values[0]
+        lon, lat = transformer.transform(x, y)
+        centroids_deg = gpd.GeoSeries([Point(lon, lat)], crs="EPSG:4326")
+
+    return centroids_deg
 
 
 # Want to think about the ways to seed infections.  Not all infections have a timer!
-def seed_infections_randomly_SI(model: Any, ninfections: int = 100) -> None:
-    """
-    Randomly seed initial infections for SI-style models without using timers.
-
-    This function randomly selects `ninfections` individuals from the population who are currently susceptible
-    and marks them as infected by setting their `susceptibility` to zero. It does not assign any infection timers,
-    making it suitable for simple SI or SIR models where timers are not required.
-
-    Unlike other seeding methods, this function explicitly ensures that only susceptible individuals are infected,
-    even if the total population includes recovered or previously infected agents.
-
-    Args:
-        model: The simulation model, which must contain a `population` with
-               `count` and `susceptibility` attributes, and a PRNG in `model.prng`.
-        ninfections (int, optional): Number of initial infections to seed. Defaults to 100.
-
-    Returns:
-        None
-    """
-    # Seed initial infections in random locations at the start of the simulation
-    cinfections = 0
-    while cinfections < ninfections:
-        index = model.prng.integers(0, model.population.count)
-        if model.population.susceptibility[index] > 0:
-            model.population.susceptibility[index] = 0
-            cinfections += 1
-
-    return
-
-
 def seed_infections_randomly(model: Any, ninfections: int = 100) -> np.ndarray:
     """
     Randomly seed initial infections across the entire population.
@@ -60,15 +371,15 @@ def seed_infections_randomly(model: Any, ninfections: int = 100) -> np.ndarray:
     """
 
     # Seed initial infections in random locations at the start of the simulation
-    pop = model.population
+    pop = model.people
     params = model.params
 
-    myinds = np.flatnonzero(pop.susceptibility)
+    myinds = np.flatnonzero(pop.state == 0)
     if len(myinds) > ninfections:
         myinds = np.random.permutation(myinds)[:ninfections]
 
     pop.itimer[myinds] = params.inf_mean
-    pop.susceptibility[myinds] = 0
+    pop.state[myinds] = State.INFECTIOUS.value
     inf_nodeids = pop.nodeid[myinds]
 
     return inf_nodeids
@@ -77,74 +388,40 @@ def seed_infections_randomly(model: Any, ninfections: int = 100) -> np.ndarray:
 def seed_infections_in_patch(model: Any, ipatch: int, ninfections: int = 1) -> None:
     """
     Seed initial infections in a specific patch of the population at the start of the simulation.
-    This function randomly selects individuals from the specified patch and sets their infection timer
-    to the mean infection duration, effectively marking them as infected. The process continues until
-    the desired number of initial infections is reached.
+
+    This function randomly selects up to `ninfections` individuals from the specified patch
+    who are currently susceptible (state == State.SUSCEPTIBLE) and marks them as infected by:
+      - Setting their infection timer (`itimer`) to the model's mean infectious duration (`inf_mean`),
+      - Setting their infection `state` to State.INFECTIOUS.
 
     Args:
-        model: The simulation model containing the population and parameters.
+        model: The simulation model containing the population and parameters. It must expose:
+               - model.people.state (integer infection state),
+               - model.people.itimer (infection timers),
+               - model.people.nodeid (patch index),
+               - model.params.inf_mean (mean infectious period).
         ipatch (int): The identifier of the patch where infections should be seeded.
-        ninfections (int, optional): The number of initial infections to seed. Defaults to 100.
+        ninfections (int, optional): The number of initial infections to seed. Defaults to 1.
 
     Returns:
         None
     """
+    pop = model.people
 
-    # Seed initial infections in a specific location at the start of the simulation
-    myinds = np.where((model.population.susceptibility > 0) & (model.population.nodeid == ipatch))[0]
-    if len(myinds) > ninfections:
-        myinds = np.random.choice(myinds, ninfections, replace=False)
-    model.population.itimer[myinds] = model.params.inf_mean
-    model.population.susceptibility[myinds] = 0
+    # Candidates: susceptible individuals in the target patch
+    susceptible_in_patch = np.where((pop.state == State.SUSCEPTIBLE.value) & (pop.nodeid == ipatch))[0]
 
-    return
+    if len(susceptible_in_patch) == 0:
+        # Nothing to do: no susceptibles in this patch
+        return
 
+    # If there are more candidates than requested infections, sample without replacement
+    if len(susceptible_in_patch) > ninfections:
+        susceptible_in_patch = np.random.choice(susceptible_in_patch, ninfections, replace=False)
 
-def set_initial_susceptibility_in_patch(model: Any, ipatch: int, susc_frac: float = 1.0) -> None:
-    """
-    Randomly assign susceptibility levels to individuals in a specific patch at the start of the simulation.
-
-    This function sets a random fraction of individuals in the specified patch to be fully immune
-    (susceptibility = 0), based on the given `susc_frac` value. The remaining individuals retain their
-    default susceptibility.
-
-    Args:
-        model: The simulation model, which must contain a `population` object with
-               `susceptibility`, `nodeid`, and `count` attributes.
-        ipatch (int): The index of the patch in which to set susceptibility.
-        susc_frac (float, optional): The fraction (0.0 to 1.0) of individuals in the patch
-                                     to remain susceptible. Defaults to 1.0 (i.e., all remain susceptible).
-
-    Returns:
-        None
-    """
-    # Seed initial infections in random locations at the start of the simulation
-    indices = np.squeeze(np.where(model.population.nodeid == ipatch))
-    patch_indices = model.prng.choice(indices, int(len(indices) * (1 - susc_frac)), replace=False)
-    model.population.susceptibility[patch_indices] = 0
-
-    return
-
-
-def set_initial_susceptibility_randomly(model: Any, susc_frac: float = 1.0) -> None:
-    """
-    Randomly assign susceptibility levels to individuals in the population at the start of the simulation.
-
-    This function sets a random fraction of the population to be fully immune (susceptibility = 0),
-    based on the given `susc_frac` value. The rest retain their default susceptibility (typically 1.0).
-
-    Args:
-        model: The simulation model containing the population and parameters. The model must have
-               a `population` object with a `susceptibility` attribute and a `count` attribute.
-        susc_frac (float, optional): The fraction (0.0 to 1.0) of the population to remain susceptible.
-                                     Defaults to 1.0 (i.e., no initial immunity).
-
-    Returns:
-        None
-    """
-    # Seed initial infections in random locations at the start of the simulation
-    indices = model.prng.choice(model.population.count, int(model.population.count * (1 - susc_frac)), replace=False)
-    model.population.susceptibility[indices] = 0
+    # Set timers and mark as infectious
+    pop.itimer[susceptible_in_patch] = model.params.inf_mean
+    pop.state[susceptible_in_patch] = State.INFECTIOUS.value
 
     return
 

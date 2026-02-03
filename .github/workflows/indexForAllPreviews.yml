@@ -10,6 +10,9 @@ jobs:
     permissions:
       contents: write
 
+    # Only allow pushing when the PR branch is in this repo (not a fork)
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
     steps:
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4

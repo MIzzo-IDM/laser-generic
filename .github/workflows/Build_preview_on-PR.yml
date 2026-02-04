@@ -8,8 +8,11 @@ jobs:
   build-preview:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-
+      contents: write
+      pages: write
+      id-token: write
+      pull_requests: write
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,4 +44,5 @@ jobs:
         with:
           name: mkdocs-site
           path: site
+
           if-no-files-found: error

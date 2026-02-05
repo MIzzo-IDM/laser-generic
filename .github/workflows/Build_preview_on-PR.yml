@@ -12,17 +12,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v4
         with:
           python-version: '3.12'
-      - run: |
+
+      - name: Install dependencies
+        run: |
           pip install mkdocs
           pip install -U pip
           pip install -r docs/requirements.txt
-      - run: mkdocs build --site-dir site
+
+      - name: Build site
+        run: mkdocs build --site-dir site
+
       - uses: actions/upload-artifact@v4
         with:
           name: pr-preview-site
           path: site
-
-

@@ -1,4 +1,4 @@
-name: Deploy PR Preview (workflow_run)
+name: Deploy PR Preview
 
 on:
   workflow_run:
@@ -12,12 +12,10 @@ permissions:
 
 jobs:
   deploy:
-    # Only deploy if the build workflow succeeded
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-      # Identify PR number from the triggering workflow_run payload
       - name: Get PR number
         id: pr
         uses: actions/github-script@v7
@@ -30,7 +28,6 @@ jobs:
             }
             core.setOutput("number", prs[0].number);
 
-      # Download artifact from the triggering workflow run
       - name: Download built site artifact
         uses: actions/github-script@v7
         with:
@@ -44,7 +41,10 @@ jobs:
             });
 
             const artifact = artifacts.artifacts.find(a => a.name === "pr-preview-site");
-            if (!artifact) core.setFailed(`Artifact 'pr-preview-site' not found. Available: ${artifacts.artifacts.map(a=>a.name).join(", ")}`);
+            if (!artifact) {
+              core.setFailed(`Artifact 'pr-preview-site' not found. Available: ${artifacts.artifacts.map(a=>a.name).join(", ")}`);
+              return;
+            }
 
             const download = await github.rest.actions.downloadArtifact({
               owner, repo,
@@ -59,13 +59,14 @@ jobs:
         run: |
           unzip -q artifact.zip -d site
 
-      - name: Deploy to gh-pages (PR preview folder)
+      - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ github.token }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./site
           destination_dir: previews/pr-${{ steps.pr.outputs.number }}
           keep_files: true
+          enable_jekyll: false
 
       - name: Comment on PR with preview link
         uses: actions/github-script@v7
@@ -80,7 +81,6 @@ jobs:
 
             (Built from workflow run: ${context.payload.workflow_run.html_url})`;
 
-            // Create or update an existing bot comment
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,

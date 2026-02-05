@@ -1,4 +1,4 @@
-name: Deploy PR Preview
+name: Deploy docs preview on PR
 
 on:
   workflow_run:
@@ -106,3 +106,4 @@ jobs:
                 body
               });
             }
+
